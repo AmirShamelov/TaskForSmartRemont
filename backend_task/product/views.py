@@ -46,10 +46,17 @@ class CartViewSet(viewsets.ViewSet):
     def create(self, request):
         session_id = request.data.get('session_id')
         product_id = request.data.get('product_id')
-        quantity = request.data.get('quantity', 1)
+        quantity = request.data.get('quantity')
 
         if not session_id or not product_id:
             return Response({'error': 'session_id and product_id are required'}, status=400)
+
+        try:
+            quantity = int(quantity)
+            if quantity <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantity must be a positive integer'}, status=400)
 
         cart = self.get_cart(session_id)
 
@@ -58,12 +65,12 @@ class CartViewSet(viewsets.ViewSet):
         except Product.DoesNotExist:
             return Response({'error': 'Product not found'}, status=404)
 
-        item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-        if created:
-            item.quantity = quantity
-        else:
-            item.quantity += int(quantity)
-        item.save()
+        try:
+            item = CartItem.objects.get(cart=cart, product=product)
+            item.quantity += quantity
+            item.save()
+        except CartItem.DoesNotExist:
+            item = CartItem.objects.create(cart=cart, product=product, quantity=quantity)
 
         return Response({'message': 'Item added to cart'}, status=201)
 
